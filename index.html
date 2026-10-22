@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>토끼의 당근 피하기</title>
+<style>
+  :root {
+    --bg: #fdf6e3;
+    --ink: #3b2f2f;
+    --sub: #8a766a;
+    --accent: #ff7f2a;
+    --accent-dark: #d9621a;
+    --panel: rgba(255, 250, 240, 0.92);
+    --heart: #ff4d6d;
+    --heart-off: #e6dad1;
+    --btn: #ffffff;
+    --btn-line: #ead9c8;
+    --btn-pressed: #ffe1c9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 480px;
+    height: 100vh;
+    height: 100dvh;
+    margin: 0 auto;
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  /* 점수·목숨 */
+  #hud { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; flex: none; }
+  .label { font-size: 14px; font-weight: 700; color: var(--sub); }
+  #scoreValue { font-size: 34px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  #scoreValue small { font-size: 18px; color: var(--sub); font-weight: 700; }
+  #livesBox { text-align: right; }
+  #lives { display: flex; gap: 2px; padding-top: 10px; }
+  #lives.bump { animation: bump 0.35s; }
+  @keyframes bump { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .heart {
+    position: relative;
+    width: 16px; height: 16px;
+    margin: 6px 6px 4px;
+    background: var(--heart);
+    transform: rotate(-45deg);
+    transition: background 0.2s;
+  }
+  .heart::before, .heart::after {
+    content: "";
+    position: absolute;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: inherit;
+  }
+  .heart::before { top: -8px; left: 0; }
+  .heart::after { top: 0; left: 8px; }
+  .heart.off { background: var(--heart-off); }
+
+  #subbar { display: flex; align-items: center; gap: 10px; flex: none; }
+  #bar { flex: 1; height: 12px; border-radius: 6px; background: #efe2d5; overflow: hidden; }
+  #barFill { height: 100%; width: 0%; background: var(--accent); border-radius: 6px; transition: width 0.1s linear; }
+  #musicBtn {
+    flex: none;
+    padding: 6px 12px;
+    font-size: 14px; font-weight: 700;
+    background: var(--btn);
+    border: 2px solid var(--btn-line);
+    border-radius: 999px;
+  }
+  #musicBtn:disabled { opacity: 0.5; cursor: default; }
+
+  /* 게임 화면 */
+  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  #board {
+    position: relative;
+    width: 300px; height: 450px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(80, 50, 30, 0.15);
+  }
+  #game { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--panel);
+    text-align: center;
+  }
+  .overlay h1 { font-size: 28px; line-height: 1.3; }
+  .overlay h2 { font-size: 34px; }
+  .overlay p { font-size: 16px; color: var(--sub); line-height: 1.5; }
+  #poster { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+  .big {
+    flex: none;
+    padding: 14px 40px;
+    font-size: 22px; font-weight: 800;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 999px;
+    box-shadow: 0 4px 0 var(--accent-dark);
+  }
+  .big:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-dark); }
+
+  /* 아래 버튼 */
+  #controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: none; }
+  #controls button {
+    height: 64px;
+    font-size: 20px; font-weight: 800;
+    background: var(--btn);
+    border: 3px solid var(--btn-line);
+    border-radius: 16px;
+    touch-action: none;
+  }
+  #controls button.pressed { background: var(--btn-pressed); border-color: var(--accent); }
+
+  /* 엔딩 영상 */
+  #ending { position: fixed; inset: 0; z-index: 100; background: #000; }
+  #endingVideo { width: 100%; height: 100%; object-fit: contain; }
+  #endingRetry { position: absolute; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom)); transform: translateX(-50%); }
+  #endingRetry:active { transform: translate(-50%, 3px); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div>
+      <div class="label">점수</div>
+      <div id="scoreValue"><span id="score">0</span><small> / 300</small></div>
+    </div>
+    <div id="livesBox">
+      <div class="label">목숨</div>
+      <div id="lives"></div>
+    </div>
+  </div>
+  <div id="subbar">
+    <div id="bar"><div id="barFill"></div></div>
+    <button id="musicBtn" type="button">음악 끄기</button>
+  </div>
+
+  <div id="stage">
+    <div id="board">
+      <canvas id="game"></canvas>
+
+      <div id="startScreen" class="overlay">
+        <img id="poster" alt="게임 포스터">
+        <h1 id="fallbackTitle" class="hidden">토끼의<br>당근 피하기</h1>
+        <p>떨어지는 당근을 피해요!<br>←, → 키 · 아래 버튼 · 화면 끌기</p>
+        <button id="startBtn" class="big" type="button">시작하기</button>
+      </div>
+
+      <div id="overScreen" class="overlay hidden">
+        <h2>게임 오버</h2>
+        <p id="overText"></p>
+        <button id="overRetry" class="big" type="button">다시 하기</button>
+      </div>
+
+      <div id="clearScreen" class="overlay hidden">
+        <h2>클리어!</h2>
+        <p>300점 달성! 당근을 모두 피했어요.</p>
+        <button id="clearRetry" class="big" type="button">다시 하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="leftBtn" type="button">← 왼쪽</button>
+    <button id="rightBtn" type="button">오른쪽 →</button>
+  </div>
+</div>
+
+<div id="ending" class="hidden">
+  <video id="endingVideo" playsinline preload="auto"></video>
+  <button id="endingRetry" class="big hidden" type="button">다시 하기</button>
+</div>
+
+<audio id="music" loop preload="auto"></audio>
+
+<script>
+(() => {
+  // ---------- 설정 ----------
+  const W = 360, H = 540;          // 게임 내부 좌표 크기
+  const GOAL = 300;                // 클리어 점수
+  const POINTS_PER_SEC = 20;
+  const MAX_LIVES = 5;
+  const INVINCIBLE_SEC = 1.5;
+  const MOVE_SPEED = 260;          // 키보드·버튼 이동 속도(px/초)
+  const DRAG_SPEED = 700;          // 끌기로 따라가는 최대 속도
+  const GROUND_Y = H - 28;         // 토끼 발 위치
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('game');
+  const ctx = canvas.getContext('2d');
+  const stage = $('stage');
+  const board = $('board');
+
+  // ---------- 상태 ----------
+  let state = 'start';             // start | play | over | clear
+  let elapsed = 0;
+  let lives = MAX_LIVES;
+  let invUntil = 0;
+  let hitFlash = 0;
+  let spawnTimer = 0;
+  let carrots = [];
+  const rabbit = { x: W / 2, lean: 0 };
+  let scale = 1;
+
+  // ---------- 화면 크기 ----------
+  function resize() {
+    const sw = stage.clientWidth;
+    const sh = stage.clientHeight;
+    const w = Math.max(1, Math.floor(Math.min(sw, sh * W / H)));
+    const h = Math.floor(w * H / W);
+    board.style.width = w + 'px';
+    board.style.height = h + 'px';
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    scale = canvas.width / W;
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- 목숨·점수 표시 ----------
+  const livesEl = $('lives');
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const h = document.createElement('span');
+    h.className = 'heart';
+    livesEl.appendChild(h);
+  }
+  let shownScore = -1, shownLives = -1;
+  function updateHud() {
+    const score = Math.min(GOAL, Math.floor(elapsed * POINTS_PER_SEC));
+    if (score !== shownScore) {
+      shownScore = score;
+      $('score').textContent = score;
+      $('barFill').style.width = (score / GOAL * 100) + '%';
+    }
+    if (lives !== shownLives) {
+      if (lives < shownLives) {
+        livesEl.classList.remove('bump');
+        void livesEl.offsetWidth;
+        livesEl.classList.add('bump');
+      }
+      shownLives = lives;
+      [...livesEl.children].forEach((h, i) => h.classList.toggle('off', i >= lives));
+    }
+  }
+
+  // ---------- 미디어 (없거나 막혀도 건너뜀) ----------
+  const poster = $('poster');
+  poster.addEventListener('error', () => {
+    poster.classList.add('hidden');
+    $('fallbackTitle').classList.remove('hidden');
+  });
+  poster.src = 'poster.png';
+
+  const music = $('music');
+  const musicBtn = $('musicBtn');
+  let musicOk = true;
+  let musicOn = true;
+  function updateMusicBtn() {
+    if (!musicOk) {
+      musicBtn.textContent = '음악 없음';
+      musicBtn.disabled = true;
+    } else {
+      musicBtn.textContent = musicOn ? '음악 끄기' : '음악 켜기';
+    }
+  }
+  function playMusic() {
+    if (!musicOk || !musicOn) return;
+    try {
+      const p = music.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch (_) {}
+  }
+  music.addEventListener('error', () => { musicOk = false; updateMusicBtn(); });
+  music.src = 'music.mp3';
+  musicBtn.addEventListener('click', () => {
+    musicOn = !musicOn;
+    updateMusicBtn();
+    if (musicOn && state !== 'start') playMusic();
+    else music.pause();
+  });
+
+  const ending = $('ending');
+  const video = $('endingVideo');
+  const endingRetry = $('endingRetry');
+  let videoOk = true;
+  let endingShowing = false;
+  video.addEventListener('error', () => {
+    videoOk = false;
+    if (endingShowing) skipEnding();
+  });
+  video.addEventListener('ended', () => {
+    if (endingShowing) endingRetry.classList.remove('hidden');
+  });
+  video.src = 'ending.mp4';
+
+  function showEnding() {
+    if (!videoOk) { showClearScreen(); return; }
+    endingShowing = true;
+    music.pause();
+    endingRetry.classList.add('hidden');
+    ending.classList.remove('hidden');
+    try { video.currentTime = 0; } catch (_) {}
+    video.muted = false;
+    const fail = () => { if (endingShowing) skipEnding(); };
+    try {
+      const p = video.play();
+      if (p && p.catch) {
+        p.catch(() => {
+          // 소리 때문에 막혔으면 음소거로 한 번 더 시도
+          if (!endingShowing || !videoOk) return fail();
+          video.muted = true;
+          try {
+            const q = video.play();
+            if (q && q.catch) q.catch(fail);
+          } catch (_) { fail(); }
+        });
+      }
+    } catch (_) { fail(); }
+  }
+  function hideEnding() {
+    endingShowing = false;
+    try { video.pause(); } catch (_) {}
+    ending.classList.add('hidden');
+    endingRetry.classList.add('hidden');
+  }
+  function skipEnding() {
+    hideEnding();
+    showClearScreen();
+  }
+  function showClearScreen() {
+    $('clearScreen').classList.remove('hidden');
+  }
+
+  // ---------- 게임 흐름 ----------
+  function resetGame() {
+    elapsed = 0;
+    lives = MAX_LIVES;
+    invUntil = 0;
+    hitFlash = 0;
+    spawnTimer = 0.6;
+    carrots = [];
+    rabbit.x = W / 2;
+    rabbit.lean = 0;
+    dragX = null;
+    updateHud();
+  }
+  function startGame() {
+    hideEnding();
+    ['startScreen', 'overScreen', 'clearScreen'].forEach((id) => $(id).classList.add('hidden'));
+    resetGame();
+    state = 'play';
+    playMusic();
+  }
+  function gameOver() {
+    state = 'over';
+    $('overText').textContent = '점수 ' + Math.floor(elapsed * POINTS_PER_SEC) + '점 · 한 번 더 해 봐요!';
+    $('overScreen').classList.remove('hidden');
+  }
+  function gameClear() {
+    state = 'clear';
+    elapsed = GOAL / POINTS_PER_SEC;
+    carrots = [];
+    updateHud();
+    showEnding();
+  }
+
+  $('startBtn').addEventListener('click', startGame);
+  $('overRetry').addEventListener('click', startGame);
+  $('clearRetry').addEventListener('click', startGame);
+  endingRetry.addEventListener('click', startGame);
+
+  // ---------- 조작 ----------
+  const keys = { left: false, right: false };
+  const hold = { left: false, right: false };
+  let dragId = null;
+  let dragX = null;
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') { keys.left = true; e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { keys.right = true; e.preventDefault(); }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft') keys.left = false;
+    else if (e.key === 'ArrowRight') keys.right = false;
+  });
+  window.addEventListener('blur', () => {
+    keys.left = keys.right = hold.left = hold.right = false;
+    document.querySelectorAll('#controls button').forEach((b) => b.classList.remove('pressed'));
+    dragId = null; dragX = null;
+  });
+
+  function bindHold(btn, side) {
+    const on = (e) => {
+      e.preventDefault();
+      hold[side] = true;
+      btn.classList.add('pressed');
+      try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+    };
+    const off = () => {
+      hold[side] = false;
+      btn.classList.remove('pressed');
+    };
+    btn.addEventListener('pointerdown', on);
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((t) => btn.addEventListener(t, off));
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+  bindHold($('leftBtn'), 'left');
+  bindHold($('rightBtn'), 'right');
+
+  function toGameX(e) {
+    const r = canvas.getBoundingClientRect();
+    return (e.clientX - r.left) / r.width * W;
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (state !== 'play') return;
+    e.preventDefault();
+    dragId = e.pointerId;
+    dragX = toGameX(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerId === dragId) dragX = toGameX(e);
+  });
+  ['pointerup', 'pointercancel'].forEach((t) => canvas.addEventListener(t, (e) => {
+    if (e.pointerId === dragId) { dragId = null; dragX = null; }
+  }));
+
+  // ---------- 갱신 ----------
+  function update(dt) {
+    elapsed += dt;
+    const progress = Math.min(1, elapsed * POINTS_PER_SEC / GOAL);
+
+    // 토끼 이동
+    const dir = ((keys.right || hold.right) ? 1 : 0) - ((keys.left || hold.left) ? 1 : 0);
+    let lean = 0;
+    if (dir !== 0) {
+      rabbit.x += dir * MOVE_SPEED * dt;
+      lean = dir;
+    } else if (dragX !== null) {
+      const d = dragX - rabbit.x;
+      const step = DRAG_SPEED * dt;
+      rabbit.x += Math.abs(d) <= step ? d : Math.sign(d) * step;
+      if (Math.abs(d) > 3) lean = Math.sign(d);
+    }
+    rabbit.x = Math.max(26, Math.min(W - 26, rabbit.x));
+    rabbit.lean += (lean - rabbit.lean) * Math.min(1, dt * 12);
+
+    // 당근 만들기 (처음엔 드물게, 점점 조금 자주)
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnTimer = 0.95 - 0.3 * progress + Math.random() * 0.25;
+      carrots.push({
+        x: 22 + Math.random() * (W - 44),
+        y: -30,
+        vy: 110 + 60 * progress + Math.random() * 30,
+        rot: (Math.random() - 0.5) * 0.4,
+        spin: (Math.random() - 0.5) * 1.2,
+      });
+    }
+
+    // 당근 이동·부딪힘
+    const invincible = elapsed < invUntil;
+    // 토끼 판정 상자: 그림보다 작게 (머리~배 안쪽)
+    const hb = { l: rabbit.x - 14, r: rabbit.x + 14, t: GROUND_Y - 50, b: GROUND_Y - 8 };
+    for (let i = carrots.length - 1; i >= 0; i--) {
+      const c = carrots[i];
+      c.y += c.vy * dt;
+      c.rot += c.spin * dt;
+      if (c.y > H + 40) { carrots.splice(i, 1); continue; }
+      if (invincible) continue;
+      // 당근 판정: 몸통 가운데 작은 원
+      const cx = c.x, cy = c.y + 2, cr = 7;
+      const nx = Math.max(hb.l, Math.min(cx, hb.r));
+      const ny = Math.max(hb.t, Math.min(cy, hb.b));
+      if ((cx - nx) ** 2 + (cy - ny) ** 2 < cr * cr) {
+        carrots.splice(i, 1);
+        lives--;
+        invUntil = elapsed + INVINCIBLE_SEC;
+        hitFlash = 0.25;
+        if (lives <= 0) { updateHud(); gameOver(); return; }
+        break;
+      }
+    }
+    hitFlash = Math.max(0, hitFlash - dt);
+
+    if (elapsed * POINTS_PER_SEC >= GOAL) { gameClear(); return; }
+    updateHud();
+  }
+
+  // ---------- 그리기 ----------
+  function ellipse(x, y, rx, ry, rot = 0) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+  }
+
+  function drawBackground(t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#a9dcff');
+    g.addColorStop(1, '#e9f7ff');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // 구름
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    const clouds = [[60, 90, 1], [250, 160, 0.8], [140, 280, 0.65]];
+    clouds.forEach(([x, y, s], i) => {
+      const cx = (x + t * (6 + i * 3)) % (W + 120) - 60;
+      ellipse(cx, y, 34 * s, 14 * s); ctx.fill();
+      ellipse(cx - 20 * s, y + 4 * s, 20 * s, 11 * s); ctx.fill();
+      ellipse(cx + 22 * s, y + 3 * s, 22 * s, 12 * s); ctx.fill();
+    });
+
+    // 풀밭
+    ctx.fillStyle = '#8fd46b';
+    ctx.fillRect(0, H - 34, W, 34);
+    ctx.fillStyle = '#76bf55';
+    ctx.fillRect(0, H - 34, W, 5);
+    ctx.strokeStyle = '#6aae4a';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    for (let x = 10; x < W; x += 26) {
+      ctx.beginPath();
+      ctx.moveTo(x, H - 8); ctx.lineTo(x - 3, H - 16);
+      ctx.moveTo(x + 6, H - 8); ctx.lineTo(x + 8, H - 18);
+      ctx.stroke();
+    }
+  }
+
+  function drawRabbit(x, y, lean) {
+    ctx.save();
+    ctx.translate(x, y);
+
+    // 그림자
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ellipse(0, 0, 24, 5); ctx.fill();
+
+    ctx.rotate(lean * 0.1);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#d8cbc0';
+
+    // 발
+    ctx.fillStyle = '#ffffff';
+    ellipse(-10, -4, 9, 5); ctx.fill(); ctx.stroke();
+    ellipse(10, -4, 9, 5); ctx.fill(); ctx.stroke();
+
+    // 몸
+    ellipse(0, -20, 18, 17); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff3f5';
+    ellipse(0, -16, 10, 10); ctx.fill();
+
+    // 귀
+    ctx.fillStyle = '#ffffff';
+    ellipse(-8, -62, 6.5, 17, -0.15); ctx.fill(); ctx.stroke();
+    ellipse(8, -62, 6.5, 17, 0.15); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffb3c4';
+    ellipse(-8, -61, 3, 12, -0.15); ctx.fill();
+    ellipse(8, -61, 3, 12, 0.15); ctx.fill();
+
+    // 머리
+    ctx.fillStyle = '#ffffff';
+    ellipse(0, -42, 16, 15); ctx.fill(); ctx.stroke();
+
+    // 눈
+    ctx.fillStyle = '#3b2f2f';
+    ellipse(-6, -44, 2.4, 3); ctx.fill();
+    ellipse(6, -44, 2.4, 3); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ellipse(-5.3, -45, 0.9, 0.9); ctx.fill();
+    ellipse(6.7, -45, 0.9, 0.9); ctx.fill();
+
+    // 볼·코·입
+    ctx.fillStyle = 'rgba(255,140,160,0.45)';
+    ellipse(-10, -38, 3.5, 2.2); ctx.fill();
+    ellipse(10, -38, 3.5, 2.2); ctx.fill();
+    ctx.fillStyle = '#ff8fa6';
+    ellipse(0, -39, 2.4, 1.8); ctx.fill();
+    ctx.strokeStyle = '#a07a70';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, -37.5); ctx.lineTo(0, -35.5);
+    ctx.moveTo(0, -35.5); ctx.quadraticCurveTo(-2.5, -33.5, -4, -35);
+    ctx.moveTo(0, -35.5); ctx.quadraticCurveTo(2.5, -33.5, 4, -35);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawCarrot(c) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.rot);
+
+    // 잎
+    ctx.fillStyle = '#4cb050';
+    ellipse(-5, -24, 3.5, 9, -0.5); ctx.fill();
+    ellipse(5, -24, 3.5, 9, 0.5); ctx.fill();
+    ctx.fillStyle = '#3d9a42';
+    ellipse(0, -26, 3.5, 10); ctx.fill();
+
+    // 몸통 (아래로 뾰족)
+    ctx.fillStyle = '#ff8a2a';
+    ctx.strokeStyle = '#df6a12';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-11, -16);
+    ctx.quadraticCurveTo(-10, 6, 0, 24);
+    ctx.quadraticCurveTo(10, 6, 11, -16);
+    ctx.quadraticCurveTo(0, -21, -11, -16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 주름
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-8, -6); ctx.lineTo(-2, -5);
+    ctx.moveTo(3, 2); ctx.lineTo(7, 1);
+    ctx.moveTo(-5, 9); ctx.lineTo(-1, 10);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function draw(t) {
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    drawBackground(t);
+
+    carrots.forEach(drawCarrot);
+
+    const invincible = state === 'play' && elapsed < invUntil;
+    const visible = !invincible || Math.floor(elapsed * 12) % 2 === 0;
+    if (visible) drawRabbit(rabbit.x, GROUND_Y, rabbit.lean);
+
+    if (hitFlash > 0) {
+      ctx.fillStyle = 'rgba(255,60,80,' + (hitFlash / 0.25 * 0.25) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // ---------- 반복 ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    if (state === 'play') update(dt);
+    draw(now / 1000);
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  updateHud();
+  updateMusicBtn();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
